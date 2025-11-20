@@ -190,6 +190,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"文件格式检查失败: {e}")
             return False
+
     def update_layer_status(self, boards: int):
         layers = [(0x01, self.ui.label_1, "第1层"), (0x02, self.ui.label_2, "第2层"),
                   (0x04, self.ui.label_3, "第3层"), (0x08, self.ui.label_4, "第4层"),
@@ -705,13 +706,6 @@ class MainWindow(QMainWindow):
                             self.log("提示：Reg2/Reg3 未自动发送，请手动在下拉框选择 '02-Reg02' 或 '02-Reg03' 发送", "warning")
                         else:
                             self.log("无在线板卡", "warning")
-                            """
-                            self.log("开始为在线板卡发送命令序列", "info")
-                            if not self.send_commands_for_online_layers(online_boards):
-                                self.log("命令序列发送失败", "error")
-                            else:
-                                self.log("所有命令序列发送完成", "info")
-                            """
                     if current_index == "Start":
                         self.start_async_read()
                         if self.collection_mode == "cosmic":
@@ -762,7 +756,7 @@ class MainWindow(QMainWindow):
                     index += 4
                     count += 1
                 return bytes(result)
-            elif command == "05-Th_value":
+            elif command == "05-Th_value": # [bugfix] name sh be Th_num for fired nr of strips
                 if len(data) != 1:
                     self.show_warning_dialog("错误", "阈值命令只能包含一个值")
                     return None
@@ -958,16 +952,6 @@ class MainWindow(QMainWindow):
         self.run_counter += 1
 
 
-    #def_stop_async_read(self):
-    #    if
-    def on_new_file_needed(self):
-        if self.collection_mode == "cosmic":
-            self.log("收到新文件请求，切换到新文件", "info")
-            self.create_new_writer_thread()
-        else:
-            self.log("当前非 cosmic 模式，忽略新文件请求", "info")
-   
-    
     def safe_stop_async_read(self):
         if self.is_stopping:
             self.log("正在停止中，请稍候...", "info")
@@ -977,38 +961,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._stop_async_read_internal)
 
     
-    def _stop_async_read_internal(self):
-        try:
-            # 1. 发送硬件 Stop 命令
-            if not self.stop_sent:
-                self.send_stop_trigger()
-                self.stop_sent = True
-
-            # 2. 停止定时器
-            if self.trigger_timer.isActive():
-                self.trigger_timer.stop()
-
-            # 3. 停止读取线程
-            if self.read_thread and self.read_thread.isRunning():
-                self.read_thread.stop()
-                self.read_thread.wait(3000)
-
-            # 4. 排空剩余数据
-            self.log("排空中剩余数据...", "info")
-            self.drain_thread = DrainDataThread(self.ep_in)
-            self.drain_thread.progress_signal.connect(self.log)
-            self.drain_thread.finished_signal.connect(self.on_drain_finished)
-            self.drain_thread.start()
-
-        except Exception as e:
-            self.log(f"停止过程中异常: {e}", "error")
-        finally:
-            # 5. 关键：重置采集状态
-            self.is_running = False
-            self.is_stopping = False
-            self.statusBar().showMessage("采集已停止")
-
-            
     def _stop_async_read_internal(self):
         try:
             stop_cmd = self.make_command("Stop", [])
@@ -1417,22 +1369,20 @@ class MainWindow(QMainWindow):
             self.writer_thread.stop()
             self.writer_thread.wait(5000)
 
-    def stop_collection(self):
-        """彻底停止采集（Cosmic 结束或手动 Stop）"""
-        self.trigger_timer.stop()
-        if self.is_running and not self.stop_sent:
-            self.send_stop_trigger()
+    # def stop_collection(self):
+    #     """彻底停止采集（Cosmic 结束或手动 Stop）"""
+    #     self.trigger_timer.stop()
+    #     if self.is_running and not self.stop_sent:
+    #         self.send_stop_trigger()
             
 
-        self.stop_current_writer()
-        if hasattr(self, 'read_thread'):
-            self.read_thread.stop()
+    #     self.stop_current_writer()
+    #     if hasattr(self, 'read_thread'):
+    #         self.read_thread.stop()
 
-        self.is_running = False
-        self.log("采集已完全停止", "info")
-        self.statusBar().showMessage("采集已停止")
-
-
+    #     self.is_running = False
+    #     self.log("采集已完全停止", "info")
+    #     self.statusBar().showMessage("采集已停止")
 
 
     def on_analyze_baseline(self):
@@ -1507,114 +1457,6 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_reset_usb.setEnabled(True)
         self.ui.pushButton_reset_usb.setText("复位 USB")
     
-        # --------------------------------------------------------------
-    # 1. 发送 Stop 命令（广播 + 在线板卡）
-    # --------------------------------------------------------------
-    def _send_stop_commands(self):
-        self.log("发送 Stop 命令以清理固件残留状态...", "info")
-        try:
-            # 先 Check 获取在线板卡
-            check_cmd = bytes([0xFA, 0xFF, 0x01, 0x00])
-            self.send_to_usb(check_cmd)
-            readed = self.read_from_usb(1000)
-            online_boards = []
-            if readed == 4:
-                self.boards = self.recv[3]
-                online_boards = self.update_layer_status(self.boards)
-            else:
-                self.log("Check 响应异常，使用广播 Stop", "warning")
-
-            # 广播 + 逐板发送
-            for board_id in [0xFF] + online_boards:
-                stop_cmd = bytes([0xFA, board_id, 0x07, 0x00])
-                self.send_to_usb(stop_cmd)
-                resp = self.read_from_usb(1000)
-                if resp == 4:
-                    self.log(f"Stop → 板卡 0x{board_id:02X} 成功", "info")
-                else:
-                    self.log(f"Stop → 板卡 0x{board_id:02X} 响应异常", "warning")
-                time.sleep(0.05)
-        except Exception as e:
-            self.log(f"Stop 命令发送失败: {e}", "warning")
-
-    # --------------------------------------------------------------
-    # 2. 清除端点 HALT/STALL
-    # --------------------------------------------------------------
-    def _clear_endpoint_halt(self):
-        self.log("清除 Bulk 端点 HALT/STALL...", "info")
-        for ep in (EP_IN, EP_OUT):
-            try:
-                self.selected_device.clear_halt(ep)
-                self.log(f"端点 0x{ep:02x} HALT 已清除", "info")
-            except AttributeError:
-                # libusb 版本无 clear_halt，用控制传输
-                try:
-                    self.selected_device.ctrl_transfer(
-                        bmRequestType=0x02,  # ENDPOINT OUT
-                        bRequest=0x01,       # CLEAR_FEATURE
-                        wValue=0,            # ENDPOINT_HALT
-                        wIndex=ep,
-                        data_or_wLength=None,
-                        timeout=500
-                    )
-                    self.log(f"端点 0x{ep:02x} 通过 ctrl_transfer 清除", "info")
-                except Exception as e2:
-                    self.log(f"端点 0x{ep:02x} 清除失败: {e2}", "warning")
-            except Exception as e:
-                self.log(f"端点 0x{ep:02x} 清除失败: {e}", "warning")
-
-    # --------------------------------------------------------------
-    # 3. USB 设备 reset
-    # --------------------------------------------------------------
-    def _reset_usb_device(self):
-        self.log("执行 USB 设备 reset...", "info")
-        try:
-            self.selected_device.reset()
-            self.log("USB reset 完成", "info")
-            time.sleep(1.5)  # 等待固件处理 RESET 事件
-        except Exception as e:
-            self.log(f"USB reset 失败: {e}", "error")
-            raise
-
-    # --------------------------------------------------------------
-    # 4. 重新配置 + 排空残留数据
-    # --------------------------------------------------------------
-    def _reconfigure_and_drain(self):
-        self.log("重新配置 USB 接口...", "info")
-        try:
-            self.selected_device.set_configuration()
-            cfg = self.selected_device.get_active_configuration()
-            intf = cfg[(0, 0)]
-            self.ep_out = usb.util.find_descriptor(intf, bEndpointAddress=EP_OUT)
-            self.ep_in  = usb.util.find_descriptor(intf, bEndpointAddress=EP_IN)
-            if not (self.ep_out and self.ep_in):
-                raise RuntimeError("端点获取失败")
-            self.log("端点重新获取成功", "info")
-        except Exception as e:
-            self.log(f"重新配置失败: {e}", "error")
-            raise
-
-        # 排空残留数据
-        self.log("排空端点残留数据...", "info")
-        drained = 0
-        for _ in range(50):
-            try:
-                data = self.ep_in.read(16384, timeout=100)
-                drained += len(data)
-            except usb.core.USBError as e:
-                if e.errno == 110:  # timeout
-                    break
-                if e.errno in (19, 108):
-                    break
-            except:
-                break
-        if drained:
-            self.log(f"已排空 {drained} 字节残留数据", "info")
-
-    # --------------------------------------------------------------
-    # 5. 统一恢复入口
-    # --------------------------------------------------------------
-
     def force_reset_usb_state(self) -> bool:
         if not self.selected_device:
             self.log("设备未连接", "error")

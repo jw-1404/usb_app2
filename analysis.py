@@ -3,7 +3,6 @@ import os
 import re
 import struct
 import time
-import resources_rc
 import threading
 import queue
 from collections import deque
