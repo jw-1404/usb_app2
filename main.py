@@ -902,13 +902,6 @@ class MainWindow(QMainWindow):
         # 创建第一个文件
         self.create_new_writer_thread()
 
-        # 发送 start_trigger
-        if self.collection_mode == "baseline":
-            self.send_start_trigger()
-            self.log("Baseline 模式：已立即发送 start_trigger", "info")
-        else:
-            self.log("Cosmic 模式：将在 10 秒后发送 start_trigger", "info")
-            QTimer.singleShot(10000, self.send_start_trigger)
 
         # 启动计时器
         self.start_time = time.time()
@@ -1355,9 +1348,6 @@ class MainWindow(QMainWindow):
             # 3. 新文件
             self.create_new_writer_thread()
 
-            # 4. 重新 start
-            self.send_start_trigger()
-            self.log(f"{self.collection_mode.upper()} 模式：已切换新文件，继续采集", "info")
 
             # 5. 重置 start_time
             self.start_time = time.time()   # 正确重置
