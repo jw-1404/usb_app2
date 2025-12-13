@@ -1,0 +1,7 @@
+.venv
+install
+build
+*.xlsx
+__pycache__
+2025*
+150*
