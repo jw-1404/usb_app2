@@ -769,7 +769,8 @@ class MainWindow(QMainWindow):
             elif command == "Start":
                 return struct.pack("BBBB", 0xfa, target_board, 0x07, 0x01)
             elif command == "Stop":
-                return struct.pack("BBBB", 0xfa, target_board, 0x07, 0x00)
+                return struct.pack("BBBB", 0xfa, 0xff, 0x07, 0x00)
+                # return struct.pack("BBBB", 0xfa, target_board, 0x07, 0x00)
             elif command == "Select_Trigger_Layers":
                 if len(data) != 1:
                     self.show_warning_dialog("错误", "触发层数命令只能包含一个值")
