@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'usb.ui'
+# Form implementation generated from reading ui file 'd:\AAA_work\python\usb_app2 - reg2\usb.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -17,7 +17,7 @@ class Ui_MainWindow(object):
         MainWindow.resize(1436, 781)
         MainWindow.setMinimumSize(QtCore.QSize(150, 0))
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("../usbpy1.0/resouce/企业微信截图_1758186144307.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        icon.addPixmap(QtGui.QPixmap("d:\\AAA_work\\python\\usb_app2 - reg2\\../usbpy1.0/resouce/企业微信截图_1758186144307.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         MainWindow.setWindowIcon(icon)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -372,7 +372,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.tabWidget.setCurrentIndex(0)
-      #  QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -403,13 +403,3 @@ class Ui_MainWindow(object):
         self.label.setText(_translate("MainWindow", "通信窗口"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "数据交互"))
 import resources_rc
-
-
-if __name__ == "__main__":
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
-    sys.exit(app.exec_())

@@ -3,6 +3,7 @@ import os
 import re
 import struct
 import time
+import resources_rc
 import threading
 import queue
 from collections import deque
@@ -25,10 +26,6 @@ import usb.backend.libusb1
 from ui_usb import Ui_MainWindow
 # 设置全局 libusb 后端
 backend = usb.backend.libusb1.get_backend(find_library=lambda x: "libusb-1.0.dll")
-
-
-
-
 
 
 
@@ -311,6 +308,15 @@ class AnalysisThread(QThread):
                     start_row += 2
             
             written_count = 0
+            # 收集所有出现的 fec_index
+            fec_indices_set = set()
+            
+            for gid in ms_map:
+                fec_index, chip_id, channel_id = decode_id(gid)
+                fec_indices_set.add(fec_index)
+            
+            fec_indices = sorted(list(fec_indices_set))
+            print(f"检测到 FEC 索引: {fec_indices}")
             
             for gid in ms_map:
                 mean, var = ms_map[gid]
@@ -339,10 +345,38 @@ class AnalysisThread(QThread):
                 ws.cell(row=row, column=col).value = f"0x{threshold:08x}"
                 written_count += 1
             
-            write_head_info(129, 1, 0, "${0:A+%d,128:B+%d}")
-            write_head_info(129, 2, 1, "${0:A+24+%d,128:B+24+%d}")
-            write_head_info(129, 3, 2, "${0:A+48+%d,128:B+48+%d}")
+            # 动态生成 write_head_info，基于实际的 fec_index
+            range_strs = [
+                "${0:A+%d,128:B+%d}",
+                "${0:A+24+%d,128:B+24+%d}",
+                "${0:A+48+%d,128:B+48+%d}",
+                "${0:A+72+%d,128:B+72+%d}",
+                "${0:A+96+%d,128:B+96+%d}",
+                "${0:A+120+%d,128:B+120+%d}",
+                "${0:A+144+%d,128:B+144+%d}",
+                "${0:A+168+%d,128:B+168+%d}"
+            ]
             
+            for col_idx, fec_idx in enumerate(fec_indices):
+                col = col_idx + 1
+                range_str = range_strs[fec_idx] if fec_idx < len(range_strs) else range_strs[0]
+                write_head_info(129, col, fec_idx, range_str)
+            
+             # 将“最后一层”之前的所有列中的空单元格填充为 0x00000000
+            # 先计算已写入阈值的最大列（对应最后一层使用到的列）
+            max_col = 0
+            for gid in ms_map:
+                fidx, chipid, _ = decode_id(gid)
+                col_idx = fidx * chips_per + chipid + 1
+                if col_idx > max_col:
+                    max_col = col_idx
+
+            # 如果找到了最大列，则把 1 .. max_col-1 的空单元格都填成 0x00000000
+            if max_col > 1:
+                for col in range(1, max_col):
+                    for row in range(1, 129):  # 通道0-127对应行1-128
+                        if ws.cell(row=row, column=col).value is None:
+                            ws.cell(row=row, column=col).value = "0x00000000"
             print(f"成功写入 {written_count} 个阈值数据")
             wb.save(output_path)
             print(f"配置文件已保存: {output_path}")

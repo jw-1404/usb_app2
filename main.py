@@ -14,9 +14,9 @@ import openpyxl
 import et_xmlfile
 from dataclasses import dataclass
 import numpy as np
-from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QFileDialog, QLabel
+from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QFileDialog, QLabel, QLineEdit
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, QObject, QTimer
-from PyQt5.QtGui import QTextCursor, QTextCharFormat, QColor
+from PyQt5.QtGui import QTextCursor, QTextCharFormat, QColor, QIcon
 from PyQt5.QtWidgets import QInputDialog, QProgressDialog
 import usb.core
 import usb.backend.libusb1
@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         self.timer.start(1000)  # 每1000ms（1秒）触发一次
         self.update_time()      # 立即更新一次
         self.current_data_dir = ""  # 当前采集周期的文件夹路径
-        """"""
+        
         # 初始化变量
         self.file_counter = 1 
         self.log_builder = []
@@ -103,10 +103,11 @@ class MainWindow(QMainWindow):
         self.channels_per_chip = 128
         self.collection_mode = "baseline"
         # 初始化触发层数下拉框
-        self.ui.Combo_trigger_value.addItems(["0 (0层)","1 (1层)", "2 (2层)", "3 (3层)", "4 (4层)", "5 (5层)", "6 (6层)"])
+        self.ui.Combo_trigger_value.addItems(["0 (0层)","1 (1层)", "2 (2层)", "3 (3层)", "4 (4层)", "5 (5层)", "6 (6层)", "7 (7层)", "8 (8层)"])
         self.ui.Combo_trigger_value.setCurrentIndex(0)
         self.init_hardcoded_commands()
         self.refresh_device_lists()
+        
 
         # 连接信号和槽
         self.ui.combox_device_lists.currentIndexChanged.connect(self.combbox_device_lists_index_changed)
@@ -126,6 +127,19 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_analyze.clicked.connect(self.on_analyze_baseline)
         self.ui.pushButton_reset_usb.clicked.connect(self.on_reset_usb_clicked)
         self.ui.pushButton_send_regs.clicked.connect(self.on_send_custom_regs_clicked)
+        
+        """
+        icon_path = os.path.join(os.path.dirname(__file__), "2.png")
+        if os.path.exists(icon_path):
+            try:
+                icon = QIcon(icon_path)
+                self.setWindowIcon(icon)  # 设置窗口图标（标题栏和任务栏）
+               # self.log(f"已加载图标: {icon_path}", "info")
+            except Exception as e:
+                self.log(f"加载图标失败: {e}", "warning")
+        else:
+            self.log(f" 图标文件未找到 ({icon_path})", "warning")
+        """
 
 
     def init_chips_per_board_combobox(self):
@@ -190,11 +204,11 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"文件格式检查失败: {e}")
             return False
-
     def update_layer_status(self, boards: int):
         layers = [(0x01, self.ui.label_1, "第1层"), (0x02, self.ui.label_2, "第2层"),
                   (0x04, self.ui.label_3, "第3层"), (0x08, self.ui.label_4, "第4层"),
-                  (0x10, self.ui.label_5, "第5层"), (0x20, self.ui.label_6, "第6层")]
+                  (0x10, self.ui.label_5, "第5层"), (0x20, self.ui.label_6, "第6层"),
+                  (0x40, self.ui.label_7, "第7层"), (0x80, self.ui.label_8, "第8层") ]
         online_count = 0
         online_boards = []
         for board_id, label, layer_name in layers:
@@ -316,7 +330,9 @@ class MainWindow(QMainWindow):
             "Select_Trigger_Layers": [0x03]
         }
 
-        self.board_ids = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20]
+        self.board_ids = []
+        for i in range(8):          # 0~7 → 第1~8层
+            self.board_ids.append(1 << i)   # 0x01, 0x02, 0x04, ..., 0x80
         self.chip_ids = [i for i in range(self.chips_per_board)] * len(self.board_ids)
         self.adc_ths = [0x00123456] * (len(self.board_ids) * self.chips_per_board * self.channels_per_chip)
         
@@ -706,10 +722,17 @@ class MainWindow(QMainWindow):
                             self.log("提示：Reg2/Reg3 未自动发送，请手动在下拉框选择 '02-Reg02' 或 '02-Reg03' 发送", "warning")
                         else:
                             self.log("无在线板卡", "warning")
+                            """
+                            self.log("开始为在线板卡发送命令序列", "info")
+                            if not self.send_commands_for_online_layers(online_boards):
+                                self.log("命令序列发送失败", "error")
+                            else:
+                                self.log("所有命令序列发送完成", "info")
+                            """
                     if current_index == "Start":
                         self.start_async_read()
                         if self.collection_mode == "cosmic":
-                            self.log("Cosmic 模式：10秒后将发送 start trigger 命令", "info")
+                            self.log("Cosmic 模式：", "info")
                            # QTimer.singleShot(10000, lambda: self.send_trigger_command(start=True))
 
                 except Exception as e:
@@ -756,7 +779,7 @@ class MainWindow(QMainWindow):
                     index += 4
                     count += 1
                 return bytes(result)
-            elif command == "05-Th_value": # [bugfix] name sh be Th_num for fired nr of strips
+            elif command == "05-Th_value":
                 if len(data) != 1:
                     self.show_warning_dialog("错误", "阈值命令只能包含一个值")
                     return None
@@ -769,8 +792,8 @@ class MainWindow(QMainWindow):
             elif command == "Start":
                 return struct.pack("BBBB", 0xfa, target_board, 0x07, 0x01)
             elif command == "Stop":
-                return struct.pack("BBBB", 0xfa, 0xff, 0x07, 0x00)
-                # return struct.pack("BBBB", 0xfa, target_board, 0x07, 0x00)
+                # 只返回固定的 Stop 命令
+                return bytes([0xFA, 0xff, 0x07, 0x00])
             elif command == "Select_Trigger_Layers":
                 if len(data) != 1:
                     self.show_warning_dialog("错误", "触发层数命令只能包含一个值")
@@ -902,8 +925,15 @@ class MainWindow(QMainWindow):
 
         # 创建第一个文件
         self.create_new_writer_thread()
-
-
+        """
+        # 发送 start_trigger
+        if self.collection_mode == "baseline":
+            self.send_start_trigger()
+            self.log("Baseline 模式：已立即发送 start_trigger", "info")
+        else:
+            self.log("Cosmic 模式：将在 10 秒后发送 start_trigger", "info")
+            QTimer.singleShot(10000, self.send_start_trigger)
+        """
         # 启动计时器
         self.start_time = time.time()
         self.trigger_timer.start(1000)
@@ -946,6 +976,16 @@ class MainWindow(QMainWindow):
         self.run_counter += 1
 
 
+    #def_stop_async_read(self):
+    #    if
+    def on_new_file_needed(self):
+        if self.collection_mode == "cosmic":
+            self.log("收到新文件请求，切换到新文件", "info")
+            self.create_new_writer_thread()
+        else:
+            self.log("当前非 cosmic 模式，忽略新文件请求", "info")
+   
+    
     def safe_stop_async_read(self):
         if self.is_stopping:
             self.log("正在停止中，请稍候...", "info")
@@ -1216,9 +1256,9 @@ class MainWindow(QMainWindow):
             self.show_warning_dialog("错误", "请先执行 Check 命令")
             return
 
-        # 动态查找 textEdit6 ~ textEdit12
+        # 动态查找 textEdit6 ~ textEdit13（最多 8 个，对应 8 层）
         text_edits = []
-        for i in range(6, 13):
+        for i in range(6, 14):
             te_name = f"textEdit{i}"
             te = getattr(self.ui, te_name, None)
             if te is None:
@@ -1250,19 +1290,28 @@ class MainWindow(QMainWindow):
                         val = 0x07
             th_values.append(val)
 
-        if len(th_values) != 7:
-            self.log(f"内部错误：th_values 长度为 {len(th_values)}，应为 7", "error")
+        # 检查阈值数量是否与在线板卡数匹配
+        if len(th_values) < len(online_boards):
+            self.log(f"错误：阈值数量 {len(th_values)} 少于在线板卡数 {len(online_boards)}", "error")
             return
 
         self.log(f"准备发送自定义 Th_value: {[f'0x{v:02x}' for v in th_values]}", "info")
 
         # 发送给每个在线板卡
-        for idx, board_id in enumerate(online_boards):
-            if idx >= len(th_values):
-                self.log(f"板卡 B-0b{board_id:08b} 无对应 Th_value，跳过", "warning")
+        # th_values 是按层序（第1层到第8层）给出的值，online_boards 是按位掩码返回。
+        # 不能简单按 online_boards 的索引去取 th_values（会在某些层离线时错位），
+        # 因此把位掩码转换为层索引来正确索引 th_values。
+        layer_bit_to_index = {0x01: 0, 0x02: 1, 0x04: 2, 0x08: 3, 0x10: 4, 0x20: 5, 0x40: 6, 0x80: 7}
+        for board_id in online_boards:
+            if board_id not in layer_bit_to_index:
+                self.log(f"未知板卡掩码 B-0b{board_id:08b}，跳过", "warning")
+                continue
+            layer_idx = layer_bit_to_index[board_id]
+            if layer_idx >= len(th_values):
+                self.log(f"板卡 B-0b{board_id:08b} 对应层索引 {layer_idx} 超出阈值输入范围，跳过", "warning")
                 continue
 
-            val = th_values[idx]
+            val = th_values[layer_idx]
             for_send = self.make_command("05-Th_value", [val], board_id)
             if not for_send:
                 self.log(f"生成命令失败 (板卡 B-0b{board_id:08b})", "error")
@@ -1292,26 +1341,18 @@ class MainWindow(QMainWindow):
                 self.log(f"发送失败 (板卡 B-0b{board_id:08b}): {e}", "error")
 
         self.log("自定义 Th_value 发送完成", "info")
-
+    """
     def send_trigger_command(self, start: bool):
-        if not self.ep_out:
-            self.log("无法发送 trigger 命令：USB 未连接", "error")
-            return
-        cmd = 0x00 if start else 0x01
-        command_bytes = bytes([0xfa, 0x00, 0x82, cmd])
-        try:
-            sended = self.send_to_usb(command_bytes)
-            if sended > 0:
-                self.log(f">> 发送 trigger {'start' if start else 'stop'}: {' '.join(f'{b:02x}' for b in command_bytes)}", "send")
-        except Exception as e:
-            self.log(f"发送 trigger 命令失败: {e}", "error")
+        # Trigger 命令已被阉割：不再向硬件发送 start/stop trigger
+        # 如果需要恢复，仅需把此函数改回发送命令的实现。
+      
 
     def send_start_trigger(self):
         self.send_trigger_command(start=True)
 
     def send_stop_trigger(self):
         self.send_trigger_command(start=False)
-
+    """
     def on_timer_tick(self):
         if not self.is_running:
             return
@@ -1327,28 +1368,22 @@ class MainWindow(QMainWindow):
         f"模式: {self.collection_mode.upper()} | 剩余: {mins:02d}:{secs:02d} | 文件: {self.run_counter}"
     )
 
-        # ---------- 提前 30 秒 stop ----------
-        if self.collection_mode == "cosmic" and elapsed >= self.collection_duration - 30 and not self.stop_sent:
-            self.send_stop_trigger()
-            self.log("Cosmic 模式：提前 30 秒发送 stop_trigger", "info")
-            self.stop_sent = True
-
         # ---------- 时间到：只执行一次 ----------
         if elapsed >= self.collection_duration:
             self.log("时间到，准备切换文件", "info")
 
-            # 1. 停止旧 writer
+            # 1. 切包：不向固件发送 Stop 命令（保持采集继续），只切换写入文件
+            #    手动停止或完全停止采集时仍会发送 Stop（见 stop_collection / safe_stop_async_read）
+           # self.log("切包：按配置不发送 Stop 命令，直接切换写文件", "info")
+           
+            # 2. 停止旧 writer
             self.stop_current_writer()
-
-            # 2. Cosmic 重新使能
-        #    if self.collection_mode == "cosmic":
-         #       if not self.resend_th_enable("06-Th_enable (Cosmic)"):
-          #          self.safe_stop_async_read()
-           #         return
 
             # 3. 新文件
             self.create_new_writer_thread()
 
+            # 4. 不需要发送 start trigger，采集自动继续
+            self.log(f"{self.collection_mode.upper()} 模式：已切换新文件，继续采集", "info")
 
             # 5. 重置 start_time
             self.start_time = time.time()   # 正确重置
@@ -1360,20 +1395,28 @@ class MainWindow(QMainWindow):
             self.writer_thread.stop()
             self.writer_thread.wait(5000)
 
-    # def stop_collection(self):
-    #     """彻底停止采集（Cosmic 结束或手动 Stop）"""
-    #     self.trigger_timer.stop()
-    #     if self.is_running and not self.stop_sent:
-    #         self.send_stop_trigger()
-            
+    def stop_collection(self):
+        """彻底停止采集（Cosmic 结束或手动 Stop）"""
+        self.trigger_timer.stop()
+        if self.is_running and not self.stop_sent:
+            # 发送真实的 Stop 命令
+            try:
+                stop_cmd = bytes([0xFA, 0xff, 0x07, 0x00])
+                self.send_to_usb(stop_cmd)
+                self.read_from_usb(500)
+                self.log("发送 Stop 命令", "info")
+            except Exception as e:
+                self.log(f"发送 Stop 命令失败: {e}", "warning")
 
-    #     self.stop_current_writer()
-    #     if hasattr(self, 'read_thread'):
-    #         self.read_thread.stop()
+        self.stop_current_writer()
+        if hasattr(self, 'read_thread'):
+            self.read_thread.stop()
 
-    #     self.is_running = False
-    #     self.log("采集已完全停止", "info")
-    #     self.statusBar().showMessage("采集已停止")
+        self.is_running = False
+        self.log("采集已完全停止", "info")
+        self.statusBar().showMessage("采集已停止")
+
+
 
 
     def on_analyze_baseline(self):
@@ -1448,6 +1491,101 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_reset_usb.setEnabled(True)
         self.ui.pushButton_reset_usb.setText("复位 USB")
     
+        # ----------------------------------------------------------
+    # 1. 发送 Stop 命令只发送一个固定命令
+    # --------------------------------------------------------------
+    def _send_stop_commands(self):
+        self.log("发送 Stop 命令以清理固件残留状态...", "info")
+        try:
+            # 只发送一个固定的 Stop 命令
+            stop_cmd = bytes([0xFA, 0xff, 0x07, 0x00])
+            self.send_to_usb(stop_cmd)
+            resp = self.read_from_usb(1000)
+            if resp == 4:
+                self.log(f"Stop 命令成功", "info")
+            else:
+                self.log(f"Stop 命令响应异常", "warning")
+        except Exception as e:
+            self.log(f"Stop 命令发送失败: {e}", "warning")
+
+    # --------------------------------------------------------------
+    # 2. 清除端点 HALT/STALL
+    # --------------------------------------------------------------
+    def _clear_endpoint_halt(self):
+        self.log("清除 Bulk 端点 HALT/STALL...", "info")
+        for ep in (EP_IN, EP_OUT):
+            try:
+                self.selected_device.clear_halt(ep)
+                self.log(f"端点 0x{ep:02x} HALT 已清除", "info")
+            except AttributeError:
+                # libusb 版本无 clear_halt，用控制传输
+                try:
+                    self.selected_device.ctrl_transfer(
+                        bmRequestType=0x02,  # ENDPOINT OUT
+                        bRequest=0x01,       # CLEAR_FEATURE
+                        wValue=0,            # ENDPOINT_HALT
+                        wIndex=ep,
+                        data_or_wLength=None,
+                        timeout=500
+                    )
+                    self.log(f"端点 0x{ep:02x} 通过 ctrl_transfer 清除", "info")
+                except Exception as e2:
+                    self.log(f"端点 0x{ep:02x} 清除失败: {e2}", "warning")
+            except Exception as e:
+                self.log(f"端点 0x{ep:02x} 清除失败: {e}", "warning")
+
+    # --------------------------------------------------------------
+    # 3. USB 设备 reset
+    # --------------------------------------------------------------
+    def _reset_usb_device(self):
+        self.log("执行 USB 设备 reset...", "info")
+        try:
+            self.selected_device.reset()
+            self.log("USB reset 完成", "info")
+            time.sleep(1.5)  # 等待固件处理 RESET 事件
+        except Exception as e:
+            self.log(f"USB reset 失败: {e}", "error")
+            raise
+
+    # --------------------------------------------------------------
+    # 4. 重新配置 + 排空残留数据
+    # --------------------------------------------------------------
+    def _reconfigure_and_drain(self):
+        self.log("重新配置 USB 接口...", "info")
+        try:
+            self.selected_device.set_configuration()
+            cfg = self.selected_device.get_active_configuration()
+            intf = cfg[(0, 0)]
+            self.ep_out = usb.util.find_descriptor(intf, bEndpointAddress=EP_OUT)
+            self.ep_in  = usb.util.find_descriptor(intf, bEndpointAddress=EP_IN)
+            if not (self.ep_out and self.ep_in):
+                raise RuntimeError("端点获取失败")
+            self.log("端点重新获取成功", "info")
+        except Exception as e:
+            self.log(f"重新配置失败: {e}", "error")
+            raise
+
+        # 排空残留数据
+        self.log("排空端点残留数据...", "info")
+        drained = 0
+        for _ in range(50):
+            try:
+                data = self.ep_in.read(16384, timeout=100)
+                drained += len(data)
+            except usb.core.USBError as e:
+                if e.errno == 110:  # timeout
+                    break
+                if e.errno in (19, 108):
+                    break
+            except:
+                break
+        if drained:
+            self.log(f"已排空 {drained} 字节残留数据", "info")
+
+    # --------------------------------------------------------------
+    # 5. 统一恢复入口
+    # --------------------------------------------------------------
+
     def force_reset_usb_state(self) -> bool:
         if not self.selected_device:
             self.log("设备未连接", "error")
@@ -1606,7 +1744,7 @@ class MainWindow(QMainWindow):
             time.sleep(0.1)
         except Exception as e:
             self.log(f"{name} 发送异常: {e}", "error")
-
+#s
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyleSheet("""
@@ -1640,7 +1778,7 @@ if __name__ == "__main__":
     QTextEdit:focus, QLineEdit:focus {
         border: 1px solid #0078D4;
     }
-    /* 新增 QComboBox 样式（与原有风格统一） */
+    /* 新增 QComboBox 样式 */
     QComboBox {
         border: 1px solid #E5E5E5;
         padding: 8px;
