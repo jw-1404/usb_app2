@@ -334,6 +334,8 @@ class AnalysisThread(QThread):
                 sigma = sigmac * np.sqrt(var)
                 #threshold = int(np.floor(mean + sigma)) - 16384  # 减去十进制的16384（即0x4000）
                 threshold = int(np.floor(16384-sigma))
+                if threshold < 0:
+                    threshold = 0
                 
                 row, col = make_write_idx(gid)
                 if row < 1 or col < 1:
