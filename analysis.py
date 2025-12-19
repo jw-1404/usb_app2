@@ -332,11 +332,8 @@ class AnalysisThread(QThread):
                 sigmac = layer_sigma_map.get(board_id, 3.0)
                 
                 sigma = sigmac * np.sqrt(var)
-                threshold = int(np.floor(mean + sigma)) - 16384  # 减去十进制的16384（即0x4000）
-                if threshold < 0:
-                    threshold = 0
-                elif threshold > 0x003000: #一般地，噪声高于0x3000，考虑是电磁干扰，屏蔽该通道
-                    threshold = 0x004000
+                #threshold = int(np.floor(mean + sigma)) - 16384  # 减去十进制的16384（即0x4000）
+                threshold = int(np.floor(16384-sigma))
                 
                 row, col = make_write_idx(gid)
                 if row < 1 or col < 1:

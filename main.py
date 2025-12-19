@@ -255,7 +255,7 @@ class MainWindow(QMainWindow):
                 self, 
                 f"输入{layer_name}的Sigma系数", 
                 f"{layer_name} Sigma系数:", 
-                3.0, 0.1, 10.0, 1
+                3.0, -20.0, 20.0, 1
             )
             if not ok:
                 # 如果用户取消，使用默认值3.0
