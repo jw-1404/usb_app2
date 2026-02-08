@@ -14,6 +14,7 @@ import openpyxl
 import et_xmlfile
 from dataclasses import dataclass
 import numpy as np
+import subprocess
 
 # 导入 PyQt5 相关模块
 from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QFileDialog, QLabel
@@ -87,6 +88,9 @@ class FileWriterThread(QThread):
         super().__init__()
         self.queue = queue
         self.file_path = file_path
+        self.interval_minutes = interval_minutes
+        self.start_time = start_time
+        self.collection_mode = collection_mode
         self.running = True
         self.batch_data = bytearray()
         self.BATCH_SIZE = 2 * 1024 * 1024
@@ -134,7 +138,10 @@ class FileWriterThread(QThread):
     def stop(self):
         self.running = False
         self.quit()
-        self.wait(5000)
+        self.wait(1000)
+        if self.collection_mode == "cosmic":
+            command = ['online/bin/data_process.sh','-p','-i','120','-I','2','-r','0','-b',self.start_time,'-c','online/config','-d',self.file_path, '-L','0x7','-m','40','-k','3','-M']
+            subprocess.Popen(command)
 
 class DrainDataThread(QThread):
     progress_signal = pyqtSignal(str)
