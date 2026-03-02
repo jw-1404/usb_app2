@@ -140,7 +140,9 @@ class FileWriterThread(QThread):
         self.quit()
         self.wait(1000)
         if self.collection_mode == "cosmic":
-            command = ['online/bin/data_process.sh','-p','-i','120','-I','2','-r','0','-b',str(self.start_time),'-c','online/config','-d',self.file_path, '-L','0x7','-m','40','-k','3','-M']
+            command = ['online/bin/data_process.sh','-p','-i','120','-I','3','-r','-1','-b',str(self.start_time),'-c','online/config','-d',self.file_path, '-L','0x7','-m','40','-k','3','-M','-K','tracks']
+            subprocess.Popen(command)
+            command = ['online/bin/data_process.sh','-p','-i','120','-I','3','-r','-1','-b',str(self.start_time),'-c','online/config','-d',self.file_path, '-L','0x7','-m','40','-k','3','-UDFPHM','-K','tracks_2']
             subprocess.Popen(command)
 
 class DrainDataThread(QThread):
