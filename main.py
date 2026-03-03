@@ -924,6 +924,7 @@ class MainWindow(QMainWindow):
         self.read_thread.start()
 
         # 创建第一个文件
+        self.start_time = time.time()
         self.create_new_writer_thread()
         """
         # 发送 start_trigger
@@ -935,7 +936,6 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(10000, self.send_start_trigger)
         """
         # 启动计时器
-        self.start_time = time.time()
         self.trigger_timer.start(1000)
 
 
