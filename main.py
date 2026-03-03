@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        self.file_interval_minutes = 10
+        self.file_interval_minutes = 2
         self.received_count = 0
         self.log_entry_count = 0
         # === 新增：采集控制变量 ===
@@ -98,13 +98,13 @@ class MainWindow(QMainWindow):
         self.ep_in = None
         self.threshold_commands: List[Dict[str, List[int]]] = []
         self.is_stopping = False
-        self.init_chips_per_board_combobox()
         self.chips_per_board = 0
+        self.init_chips_per_board_combobox()
         self.channels_per_chip = 128
         self.collection_mode = "baseline"
         # 初始化触发层数下拉框
         self.ui.Combo_trigger_value.addItems(["0 (0层)","1 (1层)", "2 (2层)", "3 (3层)", "4 (4层)", "5 (5层)", "6 (6层)", "7 (7层)", "8 (8层)"])
-        self.ui.Combo_trigger_value.setCurrentIndex(0)
+        self.ui.Combo_trigger_value.setCurrentIndex(3)
         self.init_hardcoded_commands()
         self.refresh_device_lists()
         
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
         
         for text, value in chip_options:
             self.ui.comboBox123.addItem(text, value)
-        default_index = 2  # 24芯片/板卡
+        default_index = 0  # 24芯片/板卡
         self.ui.comboBox123.setCurrentIndex(default_index)
         self.chips_per_board = self.ui.comboBox123.currentData()
         
@@ -321,7 +321,7 @@ class MainWindow(QMainWindow):
             "Check": [],
             "02-Reg02": [0x00ac0837] * self.chips_per_board,
             "02-Reg03": [0x0080010f] * self.chips_per_board,
-            "05-Th_value": [0x07],
+            "05-Th_value": [0x02],
             "06-Th_enable (baseline)": [0x00],
             "06-Th_enable (Cosmic)": [0x01],
             "08-Filter": [0x00],
@@ -654,7 +654,7 @@ class MainWindow(QMainWindow):
                         command_data = cmd["data"]
                         break
                 if command_data is None:
-                    command_data = self.commands.get(current_index, [0x07 if current_index == "05-Th_value" else 0x00])
+                    command_data = self.commands.get(current_index, [0x02 if current_index == "05-Th_value" else 0x00])
                 
                 for board_id in online_boards:
                     self.log(f"处理板卡 B-0b{board_id:08b}", "info")
@@ -961,6 +961,8 @@ class MainWindow(QMainWindow):
             self.writer_thread = FileWriterThread(
                 queue=self.read_thread.queue,
                 file_path=file_path,
+                interval_minutes= self.file_interval_minutes,
+                start_time=int(1000*self.start_time),
                 collection_mode=self.collection_mode
             )
             self.writer_thread.error_occurred.connect(self.on_usb_error)
@@ -1262,7 +1264,7 @@ class MainWindow(QMainWindow):
             te_name = f"textEdit{i}"
             te = getattr(self.ui, te_name, None)
             if te is None:
-                self.log(f"未找到 {te_name}，将使用默认值 0x07", "warning")
+                self.log(f"未找到 {te_name}，将使用默认值 0x02", "warning")
                 text_edits.append(None)
             else:
                 text_edits.append(te)
@@ -1271,12 +1273,12 @@ class MainWindow(QMainWindow):
         th_values = []
         for i, te in enumerate(text_edits):
             if te is None:
-                val = 0x07
+                val = 0x02
             else:
                 text = te.toPlainText().strip()
                 if not text:
-                    val = 0x07
-                    self.log(f"textEdit{i+6} 为空，使用默认值 0x07", "info")
+                    val = 0x02
+                    self.log(f"textEdit{i+6} 为空，使用默认值 0x02", "info")
                 else:
                     try:
                         if text.lower().startswith("0x"):
@@ -1286,8 +1288,8 @@ class MainWindow(QMainWindow):
                         if not (0 <= val <= 0xFF):
                             raise ValueError("超出 0~255 范围")
                     except:
-                        self.log(f"textEdit{i+6} 输入无效: '{text}'，使用默认 0x07", "error")
-                        val = 0x07
+                        self.log(f"textEdit{i+6} 输入无效: '{text}'，使用默认 0x02", "error")
+                        val = 0x02
             th_values.append(val)
 
         # 检查阈值数量是否与在线板卡数匹配
@@ -1393,7 +1395,7 @@ class MainWindow(QMainWindow):
     def stop_current_writer(self):
         if hasattr(self, 'writer_thread') and self.writer_thread and self.writer_thread.isRunning():
             self.writer_thread.stop()
-            self.writer_thread.wait(5000)
+            self.writer_thread.wait(1000)
 
     def stop_collection(self):
         """彻底停止采集（Cosmic 结束或手动 Stop）"""
@@ -1789,4 +1791,3 @@ if __name__ == "__main__":
     """)
     window = MainWindow()
     window.show()
-    sys.exit(app.exec_())
