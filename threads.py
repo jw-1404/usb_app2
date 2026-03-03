@@ -15,6 +15,7 @@ import et_xmlfile
 from dataclasses import dataclass
 import numpy as np
 import subprocess
+import wslPath
 
 # 导入 PyQt5 相关模块
 from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QFileDialog, QLabel
@@ -94,9 +95,6 @@ class FileWriterThread(QThread):
         self.running = True
         self.batch_data = bytearray()
         self.BATCH_SIZE = 2 * 1024 * 1024
-        print(self.file_path)
-        print(self.start_time)
-        print(self.interval_minutes)
 
     def run(self):
         try:
@@ -142,9 +140,11 @@ class FileWriterThread(QThread):
         self.running = False
         self.quit()
         self.wait(1000)
+        data_file_path = wslPath.to_posix(r"{}".format(self.file_path))
         if self.collection_mode == "cosmic":
-            command = ['wsl','-e','bash','-c','~/software/muonsys/bin/data_process.sh -c ~/software/muonsys/config -d ~/software/muonsys/demo/run-0.dat -L 0x7 -m 40 -k 3 -M']
-            subprocess.Popen(command)
+#            command = ['wsl','-e','bash','-c','~/software/muonsys/bin/data_process.sh -c ~/software/muonsys/config -d ~/software/muonsys/demo/run-0.dat -L 0x7 -m 40 -k 3 -M']
+            command = ['wsl','-e','bash','-c',f'~/software/muonsys/bin/data_process.sh -c ~/software/muonsys/config -d {data_file_path} -L 0x7 -m 40 -k 3 -M']
+            subprocess.Popen(command, creationflags=subprocess.CREATE_NO_WINDOW)
 
 class DrainDataThread(QThread):
     progress_signal = pyqtSignal(str)
