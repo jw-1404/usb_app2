@@ -923,6 +923,9 @@ class MainWindow(QMainWindow):
         self.read_thread.finished_signal.connect(self.on_read_thread_finished)
         self.read_thread.start()
 
+        # 启动计时器
+        self.start_time = time.time()
+
         # 创建第一个文件
         self.create_new_writer_thread()
         """
@@ -934,10 +937,7 @@ class MainWindow(QMainWindow):
             self.log("Cosmic 模式：将在 10 秒后发送 start_trigger", "info")
             QTimer.singleShot(10000, self.send_start_trigger)
         """
-        # 启动计时器
-        self.start_time = time.time()
         self.trigger_timer.start(1000)
-
 
     def create_new_writer_thread(self):
         """创建新文件 + 新 writer（使用已存在的 self.current_data_dir）"""
@@ -1791,3 +1791,4 @@ if __name__ == "__main__":
     """)
     window = MainWindow()
     window.show()
+    sys.exit(app.exec_())

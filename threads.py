@@ -94,6 +94,9 @@ class FileWriterThread(QThread):
         self.running = True
         self.batch_data = bytearray()
         self.BATCH_SIZE = 2 * 1024 * 1024
+        print(self.file_path)
+        print(self.start_time)
+        print(self.interval_minutes)
 
     def run(self):
         try:
@@ -140,7 +143,7 @@ class FileWriterThread(QThread):
         self.quit()
         self.wait(1000)
         if self.collection_mode == "cosmic":
-            command = []
+            command = ['wsl','-e','bash','-c','~/software/muonsys/bin/data_process.sh -c ~/software/muonsys/config -d ~/software/muonsys/demo/run-0.dat -L 0x7 -m 40 -k 3 -M']
             subprocess.Popen(command)
 
 class DrainDataThread(QThread):
